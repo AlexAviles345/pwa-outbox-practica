@@ -77,3 +77,58 @@ window.addEventListener('online', () => {
 });
 
 window.addEventListener('offline', actualizarIndicadorRed);
+// READ: recuperar y mostrar la bandeja guardada en IndexedDB.
+function renderizarColaOutbox(){
+  return obtenerTodosLosRegistros().then((registros) => {
+    const lista = document.getElementById('lista-outbox');
+    lista.textContent = '';
+
+    registros.forEach((registro) => {
+      const item = document.createElement('li');
+      item.textContent = registro.titulo + ' — ' + registro.estado + ' — ' +
+        new Date(registro.fechaCreacion).toLocaleString('es-MX');
+      lista.appendChild(item);
+    });
+  });
+}
+
+function actualizarIndicadorRed(){
+  const indicador = document.getElementById('badge-red');
+  indicador.textContent = navigator.onLine ? 'En Línea' : 'Sin conexión';
+  indicador.className = 'badge ' + (navigator.onLine ? 'online' : 'offline');
+}
+
+// Conectar el formulario con el envío resiliente proporcionado.
+document.getElementById('form-incidencia').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const formulario = e.currentTarget;
+  const datosFormulario = {
+    titulo: document.getElementById('titulo').value,
+    descripcion: document.getElementById('descripcion').value
+  };
+
+  procesarEnvioReporte(datosFormulario)
+    .then(() => formulario.reset())
+    .catch((error) => console.error('[Outbox] Error al guardar el reporte:', error));
+});
+
+// DELETE: eliminar únicamente los registros sincronizados.
+document.getElementById('btn-purgar').addEventListener('click', () => {
+  obtenerTodosLosRegistros()
+    .then((registros) => {
+      const sincronizados = registros.filter((item) => item.estado === 'sincronizado');
+      return Promise.all(sincronizados.map((item) => eliminarRegistro(item.id)));
+    })
+    .then(() => renderizarColaOutbox())
+    .catch((error) => console.error('[Outbox] Error al purgar los registros:', error));
+});
+
+// Recuperar la cola al abrir la página, también sin conexión.
+actualizarIndicadorRed();
+renderizarColaOutbox()
+  .catch((error) => console.error('[Outbox] Error al leer la bandeja:', error));
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js')
+    .catch((error) => console.error('[SW] Error al registrar el Service Worker:', error));
+}
